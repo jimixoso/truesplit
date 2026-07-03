@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { addExpense, MEMBERS } from "@/lib/api";
 
 interface Props {
@@ -14,29 +14,28 @@ export default function AddExpenseForm({ activeUserId, onSuccess }: Props) {
   const [payerId, setPayerId] = useState(activeUserId);
   const [splitIds, setSplitIds] = useState<string[]>(MEMBERS.map((m) => m.id));
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
 
-  function toggleMember(id: string) {
+  useEffect(() => {
+    setPayerId((prev) => (activeUserId ? activeUserId : prev));
+  }, [activeUserId]);
+
+  function toggleSplit(id: string) {
     setSplitIds((prev) =>
       prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]
     );
   }
 
+  const amountCents = Math.round(parseFloat(amountStr) * 100);
+  const canSubmit =
+    description.trim().length > 0 &&
+    !isNaN(amountCents) &&
+    amountCents > 0 &&
+    splitIds.length > 0;
+
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    setError(null);
+    if (!canSubmit || loading) return;
 
-    const amountCents = Math.round(parseFloat(amountStr) * 100);
-    if (!description.trim() || isNaN(amountCents) || amountCents <= 0) {
-      setError("Description and a positive amount are required.");
-      return;
-    }
-    if (splitIds.length === 0) {
-      setError("Select at least one member to split with.");
-      return;
-    }
-
-    // Equal split — remainder goes to the first member.
     const share = Math.floor(amountCents / splitIds.length);
     const remainder = amountCents - share * splitIds.length;
     const splits = splitIds.map((id, i) => ({
@@ -50,92 +49,178 @@ export default function AddExpenseForm({ activeUserId, onSuccess }: Props) {
       setDescription("");
       setAmountStr("");
       setSplitIds(MEMBERS.map((m) => m.id));
+      setPayerId(activeUserId);
       onSuccess();
-    } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : "Something went wrong.");
+    } catch (err) {
+      console.error(err);
     } finally {
       setLoading(false);
     }
   }
 
-  return (
-    <form onSubmit={handleSubmit} className="bg-white rounded-xl border border-gray-100 shadow-sm p-5 space-y-4">
-      <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wide">
-        Add Expense
-      </h2>
+  const pillBase: React.CSSProperties = {
+    fontSize: 11.5,
+    fontWeight: 600,
+    fontFamily: "var(--font-public-sans)",
+    borderRadius: 999,
+    padding: "5px 11px",
+    border: "none",
+    cursor: "pointer",
+    transition: "background .15s",
+  };
 
-      <div className="space-y-3">
+  return (
+    <form
+      onSubmit={handleSubmit}
+      style={{
+        background: "var(--color-putty)",
+        borderRadius: 18,
+        padding: "16px 18px",
+        flexShrink: 0,
+      }}
+    >
+      <p
+        style={{
+          fontSize: 12,
+          fontWeight: 700,
+          color: "var(--color-dark)",
+          letterSpacing: ".03em",
+          fontFamily: "var(--font-sora)",
+          textTransform: "uppercase",
+          margin: "0 0 10px",
+        }}
+      >
+        Add Expense
+      </p>
+
+      {/* Main input row */}
+      <div style={{ display: "flex", gap: 8, marginBottom: 10 }}>
         <input
           type="text"
-          placeholder="Description"
+          placeholder="What was it for?"
           value={description}
           onChange={(e) => setDescription(e.target.value)}
-          className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400"
+          style={{
+            flex: 1,
+            minWidth: 200,
+            background: "#fff",
+            border: "1px solid var(--color-divider)",
+            borderRadius: 12,
+            padding: "11px 14px",
+            fontSize: 14,
+            fontWeight: 500,
+            fontFamily: "var(--font-public-sans)",
+            color: "var(--color-dark)",
+            outline: "none",
+          }}
         />
+        <input
+          type="number"
+          placeholder="0.00"
+          min="0.01"
+          step="0.01"
+          value={amountStr}
+          onChange={(e) => setAmountStr(e.target.value)}
+          style={{
+            width: 120,
+            background: "#fff",
+            border: "1px solid var(--color-divider)",
+            borderRadius: 12,
+            padding: "11px 14px",
+            fontSize: 15,
+            fontWeight: 500,
+            fontFamily: "var(--font-dm-mono)",
+            color: "var(--color-dark)",
+            outline: "none",
+          }}
+        />
+        <button
+          type="submit"
+          disabled={!canSubmit || loading}
+          style={{
+            background: "var(--color-brand)",
+            color: "var(--color-cream)",
+            borderRadius: 12,
+            padding: "11px 20px",
+            fontSize: 13.5,
+            fontWeight: 700,
+            fontFamily: "var(--font-sora)",
+            border: "none",
+            cursor: canSubmit && !loading ? "pointer" : "default",
+            opacity: !canSubmit || loading ? 0.4 : 1,
+            transition: "opacity .15s",
+            whiteSpace: "nowrap",
+          }}
+        >
+          {loading ? "Adding…" : "Add"}
+        </button>
+      </div>
 
-        <div className="flex gap-2">
-          <span className="flex items-center px-3 border border-gray-200 rounded-lg text-gray-500 text-sm bg-gray-50">
-            $
-          </span>
-          <input
-            type="number"
-            placeholder="0.00"
-            min="0.01"
-            step="0.01"
-            value={amountStr}
-            onChange={(e) => setAmountStr(e.target.value)}
-            className="flex-1 border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400"
-          />
-        </div>
-
-        <div>
-          <label className="text-xs text-gray-400 mb-1 block">Paid by</label>
-          <select
-            value={payerId}
-            onChange={(e) => setPayerId(e.target.value)}
-            className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400"
+      {/* Paid by + Split */}
+      <div style={{ display: "flex", gap: 24, flexWrap: "wrap", alignItems: "center" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+          <span
+            style={{
+              fontSize: 11,
+              color: "rgba(27,58,48,.5)",
+              fontFamily: "var(--font-public-sans)",
+              whiteSpace: "nowrap",
+            }}
           >
+            PAID BY
+          </span>
+          <div style={{ display: "flex", gap: 4 }}>
             {MEMBERS.map((m) => (
-              <option key={m.id} value={m.id}>
+              <button
+                key={m.id}
+                type="button"
+                onClick={() => setPayerId(m.id)}
+                style={{
+                  ...pillBase,
+                  background:
+                    m.id === payerId
+                      ? "var(--color-brand)"
+                      : "var(--color-inactive-pill)",
+                  color: m.id === payerId ? "#fff" : "var(--color-dark)",
+                }}
+              >
                 {m.name}
-              </option>
+              </button>
             ))}
-          </select>
+          </div>
         </div>
 
-        <div>
-          <label className="text-xs text-gray-400 mb-2 block">Split between</label>
-          <div className="flex flex-wrap gap-2">
-            {MEMBERS.map((m) => {
-              const selected = splitIds.includes(m.id);
-              return (
-                <button
-                  key={m.id}
-                  type="button"
-                  onClick={() => toggleMember(m.id)}
-                  className={`px-3 py-1 rounded-full text-xs font-medium border transition-colors ${
-                    selected
-                      ? "bg-indigo-600 text-white border-indigo-600"
-                      : "bg-white text-gray-500 border-gray-200 hover:border-indigo-400"
-                  }`}
-                >
-                  {m.name}
-                </button>
-              );
-            })}
+        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+          <span
+            style={{
+              fontSize: 11,
+              color: "rgba(27,58,48,.5)",
+              fontFamily: "var(--font-public-sans)",
+              whiteSpace: "nowrap",
+            }}
+          >
+            SPLIT
+          </span>
+          <div style={{ display: "flex", gap: 4 }}>
+            {MEMBERS.map((m) => (
+              <button
+                key={m.id}
+                type="button"
+                onClick={() => toggleSplit(m.id)}
+                style={{
+                  ...pillBase,
+                  background: splitIds.includes(m.id)
+                    ? "var(--color-brand)"
+                    : "var(--color-inactive-pill)",
+                  color: splitIds.includes(m.id) ? "#fff" : "var(--color-dark)",
+                }}
+              >
+                {m.name}
+              </button>
+            ))}
           </div>
         </div>
       </div>
-
-      {error && <p className="text-xs text-red-500">{error}</p>}
-
-      <button
-        type="submit"
-        disabled={loading}
-        className="w-full bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white text-sm font-semibold rounded-lg py-2.5 transition-colors"
-      >
-        {loading ? "Adding…" : "Add expense"}
-      </button>
     </form>
   );
 }
