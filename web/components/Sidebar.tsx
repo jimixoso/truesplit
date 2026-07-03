@@ -25,6 +25,8 @@ const LABEL_STYLE: React.CSSProperties = {
 };
 
 interface Props {
+  isOpen: boolean;
+  onClose: () => void;
   activeUserId: string;
   onSelectUser: (id: string) => void;
   balances: Balance[];
@@ -33,6 +35,8 @@ interface Props {
 }
 
 export default function Sidebar({
+  isOpen,
+  onClose,
   activeUserId,
   onSelectUser,
   balances,
@@ -64,6 +68,7 @@ export default function Sidebar({
 
   return (
     <aside
+      className={`sidebar${isOpen ? " open" : ""}`}
       style={{
         width: 300,
         flexShrink: 0,
@@ -75,6 +80,26 @@ export default function Sidebar({
         overflowY: "auto",
       }}
     >
+      {/* Mobile close button */}
+      <button
+        onClick={onClose}
+        aria-label="Close menu"
+        style={{
+          display: "none",
+          alignSelf: "flex-end",
+          background: "none",
+          border: "none",
+          cursor: "pointer",
+          fontSize: 20,
+          color: "var(--color-dark)",
+          padding: 0,
+          marginBottom: -8,
+        }}
+        className="sidebar-close-btn"
+      >
+        ✕
+      </button>
+
       {/* Trip header */}
       <div>
         <p
