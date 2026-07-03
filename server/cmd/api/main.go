@@ -78,16 +78,18 @@ func withCORS(next http.Handler) http.Handler {
 	})
 }
 
-// migrationsPath resolves /migrations relative to this source file's location,
-// so it works regardless of the working directory the binary is run from.
+// migrationsPath returns the migrations directory. In production (Docker) it
+// reads MIGRATIONS_DIR. In local dev it falls back to the source-relative path.
 func migrationsPath() string {
+	if dir := os.Getenv("MIGRATIONS_DIR"); dir != "" {
+		return dir
+	}
 	_, file, _, ok := runtime.Caller(0)
 	if !ok {
-		log.Fatal("cannot determine source file path")
+		log.Fatal("cannot locate migrations: set MIGRATIONS_DIR env var")
 	}
 	// file = .../server/cmd/api/main.go → go up 3 dirs to repo root
-	root := filepath.Join(filepath.Dir(file), "..", "..", "..")
-	p := filepath.Join(root, "migrations")
+	p := filepath.Join(filepath.Dir(file), "..", "..", "..", "migrations")
 	if _, err := os.Stat(p); err != nil {
 		log.Fatalf("migrations dir not found at %s: %v", p, err)
 	}

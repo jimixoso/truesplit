@@ -1,0 +1,14 @@
+services:
+  - type: web
+    name: truesplit-api
+    runtime: docker
+    dockerfilePath: ./Dockerfile
+    envVars:
+      - key: PORT
+        value: 8080
+      - key: MIGRATIONS_DIR
+        value: /app/migrations
+      - key: DATABASE_URL
+        sync: false
+      - key: REDIS_URL
+        sync: false
