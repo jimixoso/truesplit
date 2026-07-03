@@ -6,7 +6,11 @@ import {
   getBalances,
   getLedger,
   getSettlements,
+  Group,
   LedgerEntry,
+  listGroups,
+  listMembers,
+  Member,
   Settlement,
 } from "@/lib/api";
 import Sidebar from "@/components/Sidebar";
@@ -14,27 +18,65 @@ import AddExpenseForm from "@/components/AddExpenseForm";
 import LedgerFeed from "@/components/LedgerFeed";
 
 export default function Home() {
+  const [groups, setGroups] = useState<Group[]>([]);
+  const [activeGroupId, setActiveGroupId] = useState("");
+  const [members, setMembers] = useState<Member[]>([]);
   const [activeUserId, setActiveUserId] = useState("");
   const [balances, setBalances] = useState<Balance[]>([]);
   const [settlements, setSettlements] = useState<Settlement[]>([]);
   const [ledger, setLedger] = useState<LedgerEntry[]>([]);
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
-  const refresh = useCallback(async () => {
-    const [b, s, l] = await Promise.all([
-      getBalances(),
-      getSettlements(),
-      getLedger(),
+  // Fetch group-specific data whenever the active group changes.
+  const refreshGroup = useCallback(async (groupId: string) => {
+    if (!groupId) return;
+    const [b, s, l, m] = await Promise.all([
+      getBalances(groupId),
+      getSettlements(groupId),
+      getLedger(groupId),
+      listMembers(groupId),
     ]);
     setBalances(b);
     setSettlements(s);
     setLedger(l);
-    setActiveUserId((prev) => prev || (b[0]?.member_id ?? ""));
+    setMembers(m);
+    setActiveUserId((prev) => {
+      const stillValid = m.some((mem) => mem.id === prev);
+      return stillValid ? prev : (m[0]?.id ?? "");
+    });
   }, []);
 
+  // Called after any mutation (add expense, settle, add member).
+  const refresh = useCallback(() => {
+    if (activeGroupId) refreshGroup(activeGroupId);
+  }, [activeGroupId, refreshGroup]);
+
+  // On mount: load all groups and activate the first one.
   useEffect(() => {
-    refresh();
-  }, [refresh]);
+    listGroups().then((gs) => {
+      setGroups(gs);
+      if (gs.length > 0) {
+        setActiveGroupId(gs[0].id);
+        refreshGroup(gs[0].id);
+      }
+    });
+  }, [refreshGroup]);
+
+  // Re-fetch group data when active group changes.
+  useEffect(() => {
+    if (activeGroupId) refreshGroup(activeGroupId);
+  }, [activeGroupId, refreshGroup]);
+
+  const activeGroup = groups.find((g) => g.id === activeGroupId);
+
+  function handleGroupCreated(g: Group) {
+    setGroups((prev) => [...prev, g]);
+    setActiveGroupId(g.id);
+  }
+
+  function handleMemberAdded(m: Member) {
+    setMembers((prev) => [...prev, m]);
+  }
 
   return (
     <div
@@ -86,7 +128,7 @@ export default function Home() {
                 fontFamily: "var(--font-sora)",
               }}
             >
-              Austin Trip
+              {activeGroup?.name ?? "TrueSplit"}
             </span>
           </div>
           <span
@@ -114,8 +156,14 @@ export default function Home() {
           <Sidebar
             isOpen={sidebarOpen}
             onClose={() => setSidebarOpen(false)}
+            groups={groups}
+            activeGroupId={activeGroupId}
+            onSelectGroup={setActiveGroupId}
+            onGroupCreated={handleGroupCreated}
+            members={members}
             activeUserId={activeUserId}
             onSelectUser={setActiveUserId}
+            onMemberAdded={handleMemberAdded}
             balances={balances}
             settlements={settlements}
             onSettle={refresh}
@@ -131,8 +179,17 @@ export default function Home() {
               overflowY: "auto",
             }}
           >
-            <AddExpenseForm activeUserId={activeUserId} onSuccess={refresh} />
-            <LedgerFeed initial={ledger} onMutate={refresh} />
+            <AddExpenseForm
+              groupId={activeGroupId}
+              members={members}
+              activeUserId={activeUserId}
+              onSuccess={refresh}
+            />
+            <LedgerFeed
+              groupId={activeGroupId}
+              initial={ledger}
+              onMutate={refresh}
+            />
           </main>
         </div>
       </div>

@@ -1,13 +1,19 @@
 const API = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8080";
 
-export const GROUP_ID = "00000000-0000-0000-0000-000000000001";
+// ---- types -----------------------------------------------------------------
 
-export const MEMBERS = [
-  { id: "00000000-0000-0000-0001-000000000011", name: "Jimi" },
-  { id: "00000000-0000-0000-0001-000000000012", name: "Maya" },
-  { id: "00000000-0000-0000-0001-000000000013", name: "Ayo" },
-  { id: "00000000-0000-0000-0001-000000000014", name: "Chris" },
-];
+export interface Group {
+  id: string;
+  name: string;
+  created_at: string;
+}
+
+export interface Member {
+  id: string;
+  group_id: string;
+  display_name: string;
+  created_at: string;
+}
 
 export interface Balance {
   member_id: string;
@@ -42,24 +48,6 @@ export interface ExpenseResponse {
   created_at: string;
 }
 
-export async function getBalances(): Promise<Balance[]> {
-  const res = await fetch(`${API}/groups/${GROUP_ID}/balances`, { cache: "no-store" });
-  if (!res.ok) throw new Error("failed to fetch balances");
-  return res.json();
-}
-
-export async function getSettlements(): Promise<Settlement[]> {
-  const res = await fetch(`${API}/groups/${GROUP_ID}/settlements`, { cache: "no-store" });
-  if (!res.ok) throw new Error("failed to fetch settlements");
-  return res.json();
-}
-
-export async function getLedger(): Promise<LedgerEntry[]> {
-  const res = await fetch(`${API}/groups/${GROUP_ID}/ledger`, { cache: "no-store" });
-  if (!res.ok) throw new Error("failed to fetch ledger");
-  return res.json();
-}
-
 export interface AddExpenseInput {
   payerMemberId: string;
   amountCents: number;
@@ -67,9 +55,68 @@ export interface AddExpenseInput {
   splits: { member_id: string; amount_cents: number }[];
 }
 
-export async function addExpense(input: AddExpenseInput): Promise<ExpenseResponse> {
+// ---- groups ----------------------------------------------------------------
+
+export async function listGroups(): Promise<Group[]> {
+  const res = await fetch(`${API}/groups`, { cache: "no-store" });
+  if (!res.ok) throw new Error("failed to list groups");
+  return res.json();
+}
+
+export async function createGroup(name: string): Promise<Group> {
+  const res = await fetch(`${API}/groups`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ name }),
+  });
+  if (!res.ok) throw new Error("failed to create group");
+  return res.json();
+}
+
+// ---- members ---------------------------------------------------------------
+
+export async function listMembers(groupId: string): Promise<Member[]> {
+  const res = await fetch(`${API}/groups/${groupId}/members`, { cache: "no-store" });
+  if (!res.ok) throw new Error("failed to list members");
+  return res.json();
+}
+
+export async function addMember(groupId: string, displayName: string): Promise<Member> {
+  const res = await fetch(`${API}/groups/${groupId}/members`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ display_name: displayName }),
+  });
+  if (!res.ok) throw new Error("failed to add member");
+  return res.json();
+}
+
+// ---- ledger / expenses -----------------------------------------------------
+
+export async function getBalances(groupId: string): Promise<Balance[]> {
+  const res = await fetch(`${API}/groups/${groupId}/balances`, { cache: "no-store" });
+  if (!res.ok) throw new Error("failed to fetch balances");
+  return res.json();
+}
+
+export async function getSettlements(groupId: string): Promise<Settlement[]> {
+  const res = await fetch(`${API}/groups/${groupId}/settlements`, { cache: "no-store" });
+  if (!res.ok) throw new Error("failed to fetch settlements");
+  return res.json();
+}
+
+export async function getLedger(groupId: string): Promise<LedgerEntry[]> {
+  const res = await fetch(`${API}/groups/${groupId}/ledger`, { cache: "no-store" });
+  if (!res.ok) throw new Error("failed to fetch ledger");
+  return res.json();
+}
+
+export async function addExpense(
+  groupId: string,
+  input: AddExpenseInput
+): Promise<ExpenseResponse> {
   const idempotencyKey = crypto.randomUUID();
-  const res = await fetch(`${API}/groups/${GROUP_ID}/transactions`, {
+  const res = await fetch(`${API}/groups/${groupId}/transactions`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
@@ -89,6 +136,6 @@ export async function addExpense(input: AddExpenseInput): Promise<ExpenseRespons
   return res.json();
 }
 
-export function streamUrl(): string {
-  return `${API}/groups/${GROUP_ID}/stream`;
+export function streamUrl(groupId: string): string {
+  return `${API}/groups/${groupId}/stream`;
 }

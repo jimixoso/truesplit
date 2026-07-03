@@ -29,6 +29,13 @@ func NewServer(pool *pgxpool.Pool, rdb *redis.Client, hub *sse.Hub) *Server {
 
 // Routes registers all API routes on mux and returns it.
 func (s *Server) Routes(mux *http.ServeMux) {
+	// Group management
+	mux.HandleFunc("GET /groups", s.handleListGroups)
+	mux.HandleFunc("POST /groups", s.handleCreateGroup)
+	// Member management
+	mux.HandleFunc("GET /groups/{group_id}/members", s.handleListMembers)
+	mux.HandleFunc("POST /groups/{group_id}/members", s.handleAddMember)
+	// Expense / ledger
 	mux.HandleFunc("POST /groups/{group_id}/transactions", s.handlePostTransaction)
 	mux.HandleFunc("GET /groups/{group_id}/balances", s.handleGetBalances)
 	mux.HandleFunc("GET /groups/{group_id}/settlements", s.handleGetSettlements)

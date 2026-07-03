@@ -64,14 +64,17 @@ function groupEntries(entries: LedgerEntry[]): ExpenseRow[] {
 const GRID = "1fr 120px 60px 110px 90px";
 
 export default function LedgerFeed({
+  groupId,
   initial,
   onMutate,
 }: {
+  groupId: string;
   initial: LedgerEntry[];
   onMutate: () => void;
 }) {
   const [entries, setEntries] = useState<LedgerEntry[]>(initial);
   const [connected, setConnected] = useState(false);
+  const [sortAsc, setSortAsc] = useState(false); // false = newest first
   const esRef = useRef<EventSource | null>(null);
 
   useEffect(() => {
@@ -79,14 +82,15 @@ export default function LedgerFeed({
   }, [initial]);
 
   useEffect(() => {
-    const es = new EventSource(streamUrl());
+    if (!groupId) return;
+    const es = new EventSource(streamUrl(groupId));
     esRef.current = es;
 
     es.addEventListener("connected", () => setConnected(true));
 
     es.onmessage = async () => {
       try {
-        const fresh = await getLedger();
+        const fresh = await getLedger(groupId);
         setEntries(fresh);
         onMutate();
       } catch {}
@@ -95,9 +99,12 @@ export default function LedgerFeed({
     es.onerror = () => setConnected(false);
 
     return () => es.close();
-  }, [onMutate]);
+  }, [groupId, onMutate]);
 
-  const rows = groupEntries(entries);
+  const rows = (() => {
+    const grouped = groupEntries(entries); // always newest-first from groupEntries
+    return sortAsc ? [...grouped].reverse() : grouped;
+  })();
 
   return (
     <div style={{ flex: 1 }}>
@@ -149,7 +156,7 @@ export default function LedgerFeed({
           marginBottom: 0,
         }}
       >
-        {["Expense", "Paid By", "Split", "Amount", "When"].map((h, i) => (
+        {["Expense", "Paid By", "Split", "Amount"].map((h, i) => (
           <span
             key={h}
             style={{
@@ -165,6 +172,29 @@ export default function LedgerFeed({
             {h}
           </span>
         ))}
+        {/* Clickable sort toggle on WHEN */}
+        <button
+          onClick={() => setSortAsc((v) => !v)}
+          style={{
+            fontSize: 11,
+            fontWeight: 600,
+            textTransform: "uppercase",
+            color: "rgba(27,58,48,.45)",
+            fontFamily: "var(--font-sora)",
+            letterSpacing: ".02em",
+            textAlign: "right",
+            background: "none",
+            border: "none",
+            cursor: "pointer",
+            padding: 0,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "flex-end",
+            gap: 3,
+          }}
+        >
+          When {sortAsc ? "↑" : "↓"}
+        </button>
       </div>
 
       {/* Expense rows */}

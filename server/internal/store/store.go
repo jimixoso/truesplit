@@ -39,6 +39,19 @@ type ExpenseResponse struct {
 	CreatedAt      time.Time `json:"created_at"`
 }
 
+type Group struct {
+	ID        string    `json:"id"`
+	Name      string    `json:"name"`
+	CreatedAt time.Time `json:"created_at"`
+}
+
+type Member struct {
+	ID          string    `json:"id"`
+	GroupID     string    `json:"group_id"`
+	DisplayName string    `json:"display_name"`
+	CreatedAt   time.Time `json:"created_at"`
+}
+
 type BalanceRow struct {
 	MemberID    string `json:"member_id"`
 	DisplayName string `json:"display_name"`
@@ -99,6 +112,81 @@ func (s *Store) InsertExpenseWithLedger(ctx context.Context, tx pgx.Tx, p Insert
 	}
 
 	return res, nil
+}
+
+// ---- group / member mutations -----------------------------------------------
+
+func (s *Store) ListGroups(ctx context.Context) ([]Group, error) {
+	rows, err := s.pool.Query(ctx,
+		`SELECT id, name, created_at FROM groups ORDER BY created_at ASC`)
+	if err != nil {
+		return nil, fmt.Errorf("list groups: %w", err)
+	}
+	defer rows.Close()
+	var out []Group
+	for rows.Next() {
+		var g Group
+		if err := rows.Scan(&g.ID, &g.Name, &g.CreatedAt); err != nil {
+			return nil, err
+		}
+		out = append(out, g)
+	}
+	return out, rows.Err()
+}
+
+func (s *Store) CreateGroup(ctx context.Context, name string) (Group, error) {
+	var g Group
+	err := s.pool.QueryRow(ctx,
+		`INSERT INTO groups (name) VALUES ($1) RETURNING id, name, created_at`,
+		name).Scan(&g.ID, &g.Name, &g.CreatedAt)
+	return g, err
+}
+
+func (s *Store) ListMembers(ctx context.Context, groupID string) ([]Member, error) {
+	rows, err := s.pool.Query(ctx,
+		`SELECT id, group_id, display_name, created_at FROM group_members
+		 WHERE group_id = $1 ORDER BY created_at ASC`, groupID)
+	if err != nil {
+		return nil, fmt.Errorf("list members: %w", err)
+	}
+	defer rows.Close()
+	var out []Member
+	for rows.Next() {
+		var m Member
+		if err := rows.Scan(&m.ID, &m.GroupID, &m.DisplayName, &m.CreatedAt); err != nil {
+			return nil, err
+		}
+		out = append(out, m)
+	}
+	return out, rows.Err()
+}
+
+// AddMember creates a new user and adds them to the group in one transaction.
+func (s *Store) AddMember(ctx context.Context, groupID, displayName string) (Member, error) {
+	tx, err := s.pool.Begin(ctx)
+	if err != nil {
+		return Member{}, fmt.Errorf("begin tx: %w", err)
+	}
+	defer tx.Rollback(ctx) //nolint:errcheck
+
+	var userID string
+	if err := tx.QueryRow(ctx,
+		`INSERT INTO users (name) VALUES ($1) RETURNING id`, displayName).
+		Scan(&userID); err != nil {
+		return Member{}, fmt.Errorf("insert user: %w", err)
+	}
+
+	var m Member
+	if err := tx.QueryRow(ctx,
+		`INSERT INTO group_members (group_id, user_id, display_name)
+		 VALUES ($1, $2, $3)
+		 RETURNING id, group_id, display_name, created_at`,
+		groupID, userID, displayName).
+		Scan(&m.ID, &m.GroupID, &m.DisplayName, &m.CreatedAt); err != nil {
+		return Member{}, fmt.Errorf("insert group_member: %w", err)
+	}
+
+	return m, tx.Commit(ctx)
 }
 
 // ---- queries ---------------------------------------------------------------

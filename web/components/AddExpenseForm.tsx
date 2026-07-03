@@ -1,23 +1,34 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { addExpense, MEMBERS } from "@/lib/api";
+import { addExpense, Member } from "@/lib/api";
 
 interface Props {
+  groupId: string;
+  members: Member[];
   activeUserId: string;
   onSuccess: () => void;
 }
 
-export default function AddExpenseForm({ activeUserId, onSuccess }: Props) {
+export default function AddExpenseForm({ groupId, members, activeUserId, onSuccess }: Props) {
   const [description, setDescription] = useState("");
   const [amountStr, setAmountStr] = useState("");
   const [payerId, setPayerId] = useState(activeUserId);
-  const [splitIds, setSplitIds] = useState<string[]>(MEMBERS.map((m) => m.id));
+  const [splitIds, setSplitIds] = useState<string[]>(members.map((m) => m.id));
   const [loading, setLoading] = useState(false);
 
+  // Sync payer when active user or members change.
   useEffect(() => {
-    setPayerId((prev) => (activeUserId ? activeUserId : prev));
+    if (activeUserId) setPayerId(activeUserId);
   }, [activeUserId]);
+
+  useEffect(() => {
+    setSplitIds(members.map((m) => m.id));
+    setPayerId((prev) => {
+      const stillValid = members.some((m) => m.id === prev);
+      return stillValid ? prev : (members[0]?.id ?? "");
+    });
+  }, [members]);
 
   function toggleSplit(id: string) {
     setSplitIds((prev) =>
@@ -27,6 +38,8 @@ export default function AddExpenseForm({ activeUserId, onSuccess }: Props) {
 
   const amountCents = Math.round(parseFloat(amountStr) * 100);
   const canSubmit =
+    !!groupId &&
+    members.length > 0 &&
     description.trim().length > 0 &&
     !isNaN(amountCents) &&
     amountCents > 0 &&
@@ -45,10 +58,10 @@ export default function AddExpenseForm({ activeUserId, onSuccess }: Props) {
 
     setLoading(true);
     try {
-      await addExpense({ payerMemberId: payerId, amountCents, description, splits });
+      await addExpense(groupId, { payerMemberId: payerId, amountCents, description, splits });
       setDescription("");
       setAmountStr("");
-      setSplitIds(MEMBERS.map((m) => m.id));
+      setSplitIds(members.map((m) => m.id));
       setPayerId(activeUserId);
       onSuccess();
     } catch (err) {
@@ -69,50 +82,42 @@ export default function AddExpenseForm({ activeUserId, onSuccess }: Props) {
     transition: "background .15s",
   };
 
+  if (members.length === 0) {
+    return (
+      <div
+        style={{
+          background: "var(--color-putty)",
+          borderRadius: 18,
+          padding: "16px 18px",
+          flexShrink: 0,
+        }}
+      >
+        <p style={{ fontSize: 12, fontWeight: 700, color: "var(--color-dark)", letterSpacing: ".03em", fontFamily: "var(--font-sora)", textTransform: "uppercase", margin: "0 0 6px" }}>
+          Add Expense
+        </p>
+        <p style={{ fontSize: 13, color: "rgba(27,58,48,.4)", fontFamily: "var(--font-public-sans)", margin: 0 }}>
+          Add at least one person to the trip to record expenses.
+        </p>
+      </div>
+    );
+  }
+
   return (
     <form
       onSubmit={handleSubmit}
-      style={{
-        background: "var(--color-putty)",
-        borderRadius: 18,
-        padding: "16px 18px",
-        flexShrink: 0,
-      }}
+      style={{ background: "var(--color-putty)", borderRadius: 18, padding: "16px 18px", flexShrink: 0 }}
     >
-      <p
-        style={{
-          fontSize: 12,
-          fontWeight: 700,
-          color: "var(--color-dark)",
-          letterSpacing: ".03em",
-          fontFamily: "var(--font-sora)",
-          textTransform: "uppercase",
-          margin: "0 0 10px",
-        }}
-      >
+      <p style={{ fontSize: 12, fontWeight: 700, color: "var(--color-dark)", letterSpacing: ".03em", fontFamily: "var(--font-sora)", textTransform: "uppercase", margin: "0 0 10px" }}>
         Add Expense
       </p>
 
-      {/* Main input row */}
       <div style={{ display: "flex", gap: 8, marginBottom: 10 }}>
         <input
           type="text"
           placeholder="What was it for?"
           value={description}
           onChange={(e) => setDescription(e.target.value)}
-          style={{
-            flex: 1,
-            minWidth: 200,
-            background: "#fff",
-            border: "1px solid var(--color-divider)",
-            borderRadius: 12,
-            padding: "11px 14px",
-            fontSize: 14,
-            fontWeight: 500,
-            fontFamily: "var(--font-public-sans)",
-            color: "var(--color-dark)",
-            outline: "none",
-          }}
+          style={{ flex: 1, minWidth: 0, background: "#fff", border: "1px solid var(--color-divider)", borderRadius: 12, padding: "11px 14px", fontSize: 14, fontWeight: 500, fontFamily: "var(--font-public-sans)", color: "var(--color-dark)", outline: "none" }}
         />
         <input
           type="number"
@@ -121,101 +126,36 @@ export default function AddExpenseForm({ activeUserId, onSuccess }: Props) {
           step="0.01"
           value={amountStr}
           onChange={(e) => setAmountStr(e.target.value)}
-          style={{
-            width: 120,
-            background: "#fff",
-            border: "1px solid var(--color-divider)",
-            borderRadius: 12,
-            padding: "11px 14px",
-            fontSize: 15,
-            fontWeight: 500,
-            fontFamily: "var(--font-dm-mono)",
-            color: "var(--color-dark)",
-            outline: "none",
-          }}
+          style={{ width: 110, background: "#fff", border: "1px solid var(--color-divider)", borderRadius: 12, padding: "11px 14px", fontSize: 15, fontWeight: 500, fontFamily: "var(--font-dm-mono)", color: "var(--color-dark)", outline: "none" }}
         />
         <button
           type="submit"
           disabled={!canSubmit || loading}
-          style={{
-            background: "var(--color-brand)",
-            color: "var(--color-cream)",
-            borderRadius: 12,
-            padding: "11px 20px",
-            fontSize: 13.5,
-            fontWeight: 700,
-            fontFamily: "var(--font-sora)",
-            border: "none",
-            cursor: canSubmit && !loading ? "pointer" : "default",
-            opacity: !canSubmit || loading ? 0.4 : 1,
-            transition: "opacity .15s",
-            whiteSpace: "nowrap",
-          }}
+          style={{ background: "var(--color-brand)", color: "var(--color-cream)", borderRadius: 12, padding: "11px 20px", fontSize: 13.5, fontWeight: 700, fontFamily: "var(--font-sora)", border: "none", cursor: canSubmit && !loading ? "pointer" : "default", opacity: !canSubmit || loading ? 0.4 : 1, transition: "opacity .15s", whiteSpace: "nowrap" }}
         >
           {loading ? "Adding…" : "Add"}
         </button>
       </div>
 
-      {/* Paid by + Split */}
       <div style={{ display: "flex", gap: 24, flexWrap: "wrap", alignItems: "center" }}>
         <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-          <span
-            style={{
-              fontSize: 11,
-              color: "rgba(27,58,48,.5)",
-              fontFamily: "var(--font-public-sans)",
-              whiteSpace: "nowrap",
-            }}
-          >
-            PAID BY
-          </span>
-          <div style={{ display: "flex", gap: 4 }}>
-            {MEMBERS.map((m) => (
-              <button
-                key={m.id}
-                type="button"
-                onClick={() => setPayerId(m.id)}
-                style={{
-                  ...pillBase,
-                  background:
-                    m.id === payerId
-                      ? "var(--color-brand)"
-                      : "var(--color-inactive-pill)",
-                  color: m.id === payerId ? "#fff" : "var(--color-dark)",
-                }}
-              >
-                {m.name}
+          <span style={{ fontSize: 11, color: "rgba(27,58,48,.5)", fontFamily: "var(--font-public-sans)", whiteSpace: "nowrap" }}>PAID BY</span>
+          <div style={{ display: "flex", gap: 4, flexWrap: "wrap" }}>
+            {members.map((m) => (
+              <button key={m.id} type="button" onClick={() => setPayerId(m.id)}
+                style={{ ...pillBase, background: m.id === payerId ? "var(--color-brand)" : "var(--color-inactive-pill)", color: m.id === payerId ? "#fff" : "var(--color-dark)" }}>
+                {m.display_name}
               </button>
             ))}
           </div>
         </div>
-
         <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-          <span
-            style={{
-              fontSize: 11,
-              color: "rgba(27,58,48,.5)",
-              fontFamily: "var(--font-public-sans)",
-              whiteSpace: "nowrap",
-            }}
-          >
-            SPLIT
-          </span>
-          <div style={{ display: "flex", gap: 4 }}>
-            {MEMBERS.map((m) => (
-              <button
-                key={m.id}
-                type="button"
-                onClick={() => toggleSplit(m.id)}
-                style={{
-                  ...pillBase,
-                  background: splitIds.includes(m.id)
-                    ? "var(--color-brand)"
-                    : "var(--color-inactive-pill)",
-                  color: splitIds.includes(m.id) ? "#fff" : "var(--color-dark)",
-                }}
-              >
-                {m.name}
+          <span style={{ fontSize: 11, color: "rgba(27,58,48,.5)", fontFamily: "var(--font-public-sans)", whiteSpace: "nowrap" }}>SPLIT</span>
+          <div style={{ display: "flex", gap: 4, flexWrap: "wrap" }}>
+            {members.map((m) => (
+              <button key={m.id} type="button" onClick={() => toggleSplit(m.id)}
+                style={{ ...pillBase, background: splitIds.includes(m.id) ? "var(--color-brand)" : "var(--color-inactive-pill)", color: splitIds.includes(m.id) ? "#fff" : "var(--color-dark)" }}>
+                {m.display_name}
               </button>
             ))}
           </div>
