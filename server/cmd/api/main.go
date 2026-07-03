@@ -72,8 +72,8 @@ func migrationsPath() string {
 	if !ok {
 		log.Fatal("cannot determine source file path")
 	}
-	// file = .../server/cmd/api/main.go → go up 4 dirs to repo root
-	root := filepath.Join(filepath.Dir(file), "..", "..", "..", "..")
+	// file = .../server/cmd/api/main.go → go up 3 dirs to repo root
+	root := filepath.Join(filepath.Dir(file), "..", "..", "..")
 	p := filepath.Join(root, "migrations")
 	if _, err := os.Stat(p); err != nil {
 		log.Fatalf("migrations dir not found at %s: %v", p, err)
